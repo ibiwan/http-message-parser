@@ -1,300 +1,370 @@
-(function(){function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s}return e})()({1:[function(require,module,exports){
+(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 (function (process,global){
-'use strict';
+"use strict";
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
-var Buffer = require('buffer/').Buffer;
+var Buffer = require("buffer/").Buffer;
 
+//#region main
 function httpMessageParser(message) {
-  var result = {
-    httpVersion: null,
-    statusCode: null,
-    statusMessage: null,
-    method: null,
-    url: null,
-    headers: null,
-    body: null,
-    boundary: null,
-    multipart: null
-  };
+    var _stringAndBuffer = stringAndBuffer(message),
+        messageString = _stringAndBuffer.messageString,
+        messageBuffer = _stringAndBuffer.messageBuffer;
 
-  var messageString = '';
-  var headerNewlineIndex = 0;
-  var fullBoundary = null;
+    var result = void 0;
+    messageString = normalizeNewline(messageString).trim();
 
-  if (httpMessageParser._isBuffer(message)) {
-    messageString = message.toString();
-  } else if (typeof message === 'string') {
-    messageString = message;
-    message = httpMessageParser._createBuffer(messageString);
-  } else {
-    return result;
-  }
+    var _parseStartLine = parseStartLine(messageString);
 
-  /*
-   * Strip extra return characters
-   */
-  messageString = messageString.replace(/\r\n/gim, '\n');
+    result = _parseStartLine.result;
+    messageString = _parseStartLine.messageString;
 
-  /*
-   * Trim leading whitespace
-   */
-  (function () {
-    var firstNonWhitespaceRegex = /[\w-]+/gim;
-    var firstNonWhitespaceIndex = messageString.search(firstNonWhitespaceRegex);
-    if (firstNonWhitespaceIndex > 0) {
-      message = message.slice(firstNonWhitespaceIndex, message.length);
-      messageString = message.toString();
-    }
-  })();
+    var _extractHeaderBlock = extractHeaderBlock(messageString),
+        headersString = _extractHeaderBlock.headersString,
+        bodyString = _extractHeaderBlock.bodyString;
 
-  /* Parse request line
-   */
-  (function () {
-    var possibleRequestLine = messageString.split(/\n|\r\n/)[0];
-    var requestLineMatch = possibleRequestLine.match(httpMessageParser._requestLineRegex);
-
-    if (Array.isArray(requestLineMatch) && requestLineMatch.length > 1) {
-      result.httpVersion = parseFloat(requestLineMatch[1]);
-      result.statusCode = parseInt(requestLineMatch[2]);
-      result.statusMessage = requestLineMatch[3];
-    } else {
-      var responseLineMath = possibleRequestLine.match(httpMessageParser._responseLineRegex);
-      if (Array.isArray(responseLineMath) && responseLineMath.length > 1) {
-        result.method = responseLineMath[1];
-        result.url = responseLineMath[2];
-        result.httpVersion = parseFloat(responseLineMath[3]);
-      }
-    }
-  })();
-
-  /* Parse headers
-   */
-  (function () {
-    headerNewlineIndex = messageString.search(httpMessageParser._headerNewlineRegex);
-    if (headerNewlineIndex > -1) {
-      headerNewlineIndex = headerNewlineIndex + 1; // 1 for newline length
-    } else {
-      /* There's no line breaks so check if request line exists
-       * because the message might be all headers and no body
-       */
-      if (result.httpVersion) {
-        headerNewlineIndex = messageString.length;
-      }
-    }
-
-    var headersString = messageString.substr(0, headerNewlineIndex);
-    var headers = httpMessageParser._parseHeaders(headersString);
+    var headers = parseHeaders(headersString);
 
     if (Object.keys(headers).length > 0) {
-      result.headers = headers;
-
-      // TOOD: extract boundary.
-    }
-  })();
-
-  /* Try to get boundary if no boundary header
-   */
-  (function () {
-    if (!result.boundary) {
-      var boundaryMatch = messageString.match(httpMessageParser._boundaryRegex);
-
-      if (Array.isArray(boundaryMatch) && boundaryMatch.length) {
-        fullBoundary = boundaryMatch[0].replace(/[\r\n]+/gi, '');
-        var boundary = fullBoundary.replace(/^--/, '');
-        result.boundary = boundary;
-      }
-    }
-  })();
-
-  /* Parse body
-   */
-  (function () {
-    var start = headerNewlineIndex;
-    var end = message.length;
-    var firstBoundaryIndex = messageString.indexOf(fullBoundary);
-
-    if (firstBoundaryIndex > -1) {
-      start = headerNewlineIndex;
-      end = firstBoundaryIndex;
+        result.headers = headers;
     }
 
-    if (headerNewlineIndex > -1) {
-      var body = messageString.slice(start, end);
+    var _evalMultiPart = evalMultiPart(headers, bodyString),
+        isMultipart = _evalMultiPart.isMultipart,
+        fullBoundary = _evalMultiPart.fullBoundary;
 
-      if (body && body.length) {
-        result.body = body;
-      }
+    if (!isMultipart) {
+        result.body = bodyString;
+    } else {
+        var _parseMultiPart = parseMultiPart(bodyString, fullBoundary, messageBuffer),
+            multipart = _parseMultiPart.multipart,
+            body = _parseMultiPart.body,
+            meta = _parseMultiPart.meta;
+
+        Object.assign(result, { multipart: multipart, body: body, meta: meta });
     }
-  })();
 
-  /* Parse multipart sections
-   */
-  (function () {
-    if (result.boundary) {
-      var multipartStart = messageString.indexOf(fullBoundary) + fullBoundary.length;
-      var multipartEnd = messageString.lastIndexOf(fullBoundary);
-      var multipartBody = messageString.substr(multipartStart, multipartEnd);
-      var splitRegex = new RegExp('^' + fullBoundary + '.*[\n\r]?$', 'gm');
-      var parts = multipartBody.split(splitRegex);
+    return result;
+}
+//#endregion
 
-      result.multipart = parts.filter(httpMessageParser._isTruthy).map(function (part, i) {
-        var result = {
-          headers: null,
-          body: null,
-          meta: {
-            body: {
-              byteOffset: {
-                start: null,
-                end: null
-              }
-            }
-          }
+//#region regexes
+var validVersions = ["1.0", "1.1", "2.0"];
+var validVersionsFragment = validVersions.join("|").replace(".", "\\.");
+var versionRE = "(HTTP\\/(?<httpVersion>(" + validVersionsFragment + ")))";
+
+var validMethods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD", "TRACE", "CONNECT"];
+var methodRE = "(?<method>" + validMethods.join("|") + ")";
+
+var urlRE = "(?<url>\\S*)";
+var someWhitespaceRE = "\\s+";
+var anyWhiteSpaceRE = "\\s*";
+var statusCodeRE = "(?<statusCode>\\d+)";
+var statusMessageRE = "(?<statusMessage>[\\w\\s\\-_]+)";
+
+var requestLineRE = methodRE + someWhitespaceRE + urlRE + anyWhiteSpaceRE + versionRE + "?";
+var requestLineRegex = new RegExp(requestLineRE, "i");
+
+var responseLineRE = versionRE + someWhitespaceRE + statusCodeRE + someWhitespaceRE + statusMessageRE;
+var responseLineRegex = new RegExp(responseLineRE, "i");
+
+var headerNewlineRegex = /^[\r\n]+/gim;
+
+var findBoundaryRegex = /\n--(?<boundary>[\w-]+)\n/m;
+//#endregion
+
+//#region factories
+var createBuffer = function createBuffer(data) {
+    return new Buffer(data);
+};
+
+var emptyResult = function emptyResult() {
+    return {
+        httpVersion: null,
+        statusCode: null,
+        statusMessage: null,
+        method: null,
+        url: null,
+        headers: null,
+        body: null,
+        boundary: null,
+        multipart: null
+    };
+};
+//#endregion
+
+//#region predicates
+var isBuffer = function isBuffer(item) {
+    return isNodeBufferSupported() && (typeof global === "undefined" ? "undefined" : _typeof(global)) === "object" && global.Buffer.isBuffer(item) || item instanceof Object && item._isBuffer;
+};
+
+var isNodeBufferSupported = function isNodeBufferSupported() {
+    return (typeof global === "undefined" ? "undefined" : _typeof(global)) === "object" && typeof global.Buffer === "function" && typeof global.Buffer.isBuffer === "function";
+};
+
+var isNumeric = function _isNumeric(v) {
+    if (typeof v === "number" && !isNaN(v)) {
+        return true;
+    }
+
+    v = (v || "").toString().trim();
+
+    if (!v) {
+        return false;
+    }
+
+    return !isNaN(v);
+};
+//#endregion
+
+//#region transforms
+var stringAndBuffer = function stringAndBuffer(inp) {
+    var messageBuffer = void 0,
+        messageString = void 0;
+    if (isBuffer(inp)) {
+        messageBuffer = inp;
+        messageString = inp.toString();
+    } else if (typeof inp === "string") {
+        messageString = inp;
+        messageBuffer = createBuffer(messageString);
+    } else {
+        throw new Error("Data to be parsed must be a string or Buffer");
+    }
+    return { messageString: messageString, messageBuffer: messageBuffer };
+};
+
+var normalizeNewline = function normalizeNewline(str) {
+    return str.replace(/\r\n/gim, "\n");
+};
+//#endregion
+
+//#region parsers
+var parseStartLine = function parseStartLine(messageString) {
+    var result = emptyResult();
+
+    var firstLineEndsAt = messageString.indexOf("\n");
+    var firstLine = messageString.slice(0, firstLineEndsAt);
+
+    var wasReqRes = false;
+
+    var requestResult = parseRequestLine(firstLine);
+    if (requestResult) {
+        wasReqRes = true;
+        Object.assign(result, requestResult);
+    } else {
+        var responseResult = parseResponseLine(firstLine);
+        if (responseResult) {
+            wasReqRes = true;
+            Object.assign(result, responseResult);
+        }
+    }
+
+    if (wasReqRes) {
+        messageString = firstLineEndsAt === -1 ? "" : messageString.slice(firstLineEndsAt + 1);
+    }
+
+    return { result: result, messageString: messageString };
+};
+
+var parseRequestLine = function parseRequestLine(line) {
+    var matches = line.match(requestLineRegex);
+    var groups = matches && matches.groups;
+
+    if (groups) {
+        var method = groups.method,
+            url = groups.url,
+            httpVersion = groups.httpVersion;
+
+        return {
+            method: method,
+            url: url,
+            httpVersion: parseFloat(httpVersion || "1.1"),
+            type: "request"
         };
+    }
 
-        var newlineRegex = /\n\n|\r\n\r\n/gim;
-        var newlineIndex = 0;
-        var newlineMatch = newlineRegex.exec(part);
-        var body = null;
+    return null;
+};
 
-        if (newlineMatch) {
-          newlineIndex = newlineMatch.index;
-          if (newlineMatch.index <= 0) {
-            newlineMatch = newlineRegex.exec(part);
-            if (newlineMatch) {
-              newlineIndex = newlineMatch.index;
-            }
-          }
+var parseResponseLine = function parseResponseLine(line) {
+    var matches = line.match(responseLineRegex);
+    var groups = matches && matches.groups;
+
+    if (groups) {
+        var httpVersion = groups.httpVersion,
+            statusCode = groups.statusCode,
+            statusMessage = groups.statusMessage;
+
+        return {
+            httpVersion: parseFloat(httpVersion || "1.1"),
+            statusCode: parseInt(statusCode),
+            statusMessage: statusMessage,
+            type: "response"
+        };
+    }
+
+    return null;
+};
+
+var extractHeaderBlock = function extractHeaderBlock(messageString) {
+    var metaEndsAt = messageString.indexOf("\n\n");
+    if (metaEndsAt === -1) {
+        return {
+            headersString: messageString
+        };
+    }
+
+    return {
+        headersString: messageString.slice(0, metaEndsAt),
+        bodyString: messageString.slice(metaEndsAt + 1)
+    };
+};
+
+var parseHeaders = function _parseHeaders(headerString) {
+    return headerString.split("\n").reduce(function (headers, headerLine) {
+        var matches = headerLine.match(/(?<key>[\w-]+):\s*(?<value>.*)/);
+        var groups = matches && matches.groups;
+
+        if (groups && isNumeric(groups.value)) {
+            groups.value = Number(groups.value);
         }
 
-        var possibleHeadersString = part.substr(0, newlineIndex);
+        if (groups) {
+            headers[groups.key] = groups.value;
+        }
+        return headers;
+    }, {});
+};
 
-        var startOffset = null;
-        var endOffset = null;
+var evalMultiPart = function evalMultiPart(headers, bodyString) {
+    if (!headers || !headers["Content-Type"] || !headers["Content-Type"].match(/^multipart\//)) {
+        return { isMultipart: false };
+    }
+    var boundary = parseBoundaryHeader(headers) || deriveBoundary(bodyString);
 
-        if (newlineIndex > -1) {
-          var headers = httpMessageParser._parseHeaders(possibleHeadersString);
-          if (Object.keys(headers).length > 0) {
-            result.headers = headers;
+    var fullBoundary = boundary ? "\n--" + boundary : null;
 
-            var boundaryIndexes = [];
-            for (var j = 0; j >= 0;) {
-              j = message.indexOf(fullBoundary, j);
+    return {
+        isMultipart: true,
+        fullBoundary: fullBoundary
+    };
+};
 
-              if (j >= 0) {
-                boundaryIndexes.push(j);
-                j += fullBoundary.length;
-              }
-            }
+var parseBoundaryHeader = function parseBoundaryHeader(headers) {
+    var type = headers["Content-Type"];
+    if (!type) {
+        return null;
+    }
 
-            var boundaryNewlineIndexes = [];
-            boundaryIndexes.slice(0, boundaryIndexes.length - 1).forEach(function (m, k) {
-              var partBody = message.slice(boundaryIndexes[k], boundaryIndexes[k + 1]).toString();
-              var headerNewlineIndex = partBody.search(/\n\n|\r\n\r\n/gim) + 2;
-              headerNewlineIndex = boundaryIndexes[k] + headerNewlineIndex;
-              boundaryNewlineIndexes.push(headerNewlineIndex);
-            });
+    var matches = type.match(/^multipart\/[\w-]+;\s*boundary=(?<boundary>.*)$/);
+    var groups = matches && matches.groups;
+    var boundary = groups && groups.boundary;
 
-            startOffset = boundaryNewlineIndexes[i];
-            endOffset = boundaryIndexes[i + 1];
-            body = message.slice(startOffset, endOffset);
-          } else {
-            body = part;
-          }
-        } else {
-          body = part;
+    return boundary;
+};
+
+var deriveBoundary = function deriveBoundary(body) {
+    var matches = body.match(findBoundaryRegex);
+    var groups = matches && matches.groups;
+    return groups && groups.boundary;
+};
+
+var parseMultiPart = function parseMultiPart(bodyString, fullBoundary, messageBuffer) {
+    var savedBody = bodyString;
+    var partsAndParts = [];
+
+    var lastStringBoundary = bodyString.indexOf(fullBoundary);
+    var lastBufferBoundary = messageBuffer.indexOf(fullBoundary);
+
+    var hop = fullBoundary.length;
+
+    while (lastStringBoundary !== -1 && lastBufferBoundary !== -1) {
+        var nextStringBoundary = bodyString.indexOf(fullBoundary, lastStringBoundary + hop);
+        var nextBufferBoundary = messageBuffer.indexOf(fullBoundary, lastBufferBoundary + hop);
+
+        if (nextStringBoundary === -1 || nextBufferBoundary === -1) {
+            break;
         }
 
-        result.body = body;
-        result.meta.body.byteOffset.start = startOffset;
-        result.meta.body.byteOffset.end = endOffset;
+        // copy next part without moving the line
+        var partString = bodyString.slice(lastStringBoundary + hop, nextStringBoundary);
+        var partBuffer = messageBuffer.slice(lastBufferBoundary + hop, nextBufferBoundary);
 
-        return result;
-      });
+        partsAndParts.push({
+            partString: partString,
+            partBuffer: partBuffer,
+            partBufferOffset: lastBufferBoundary + hop
+        });
+
+        // record next place to search from
+        lastStringBoundary = nextStringBoundary;
+        lastBufferBoundary = nextBufferBoundary;
     }
-  })();
 
-  return result;
-}
+    var parts = partsAndParts.map(parseBodyPart);
 
-httpMessageParser._isTruthy = function _isTruthy(v) {
-  return !!v;
+    return { multipart: parts, body: savedBody };
 };
 
-httpMessageParser._isNumeric = function _isNumeric(v) {
-  if (typeof v === 'number' && !isNaN(v)) {
-    return true;
-  }
+var parseBodyPart = function parseBodyPart(_ref) {
+    var partString = _ref.partString,
+        partBuffer = _ref.partBuffer,
+        partBufferOffset = _ref.partBufferOffset;
 
-  v = (v || '').toString().trim();
+    var partHeaderEndsAt = partString.indexOf("\n\n");
 
-  if (!v) {
-    return false;
-  }
-
-  return !isNaN(v);
-};
-
-httpMessageParser._isBuffer = function (item) {
-  return httpMessageParser._isNodeBufferSupported() && (typeof global === 'undefined' ? 'undefined' : _typeof(global)) === 'object' && global.Buffer.isBuffer(item) || item instanceof Object && item._isBuffer;
-};
-
-httpMessageParser._isNodeBufferSupported = function () {
-  return (typeof global === 'undefined' ? 'undefined' : _typeof(global)) === 'object' && typeof global.Buffer === 'function' && typeof global.Buffer.isBuffer === 'function';
-};
-
-httpMessageParser._parseHeaders = function _parseHeaders(body) {
-  var headers = {};
-
-  if (typeof body !== 'string') {
-    return headers;
-  }
-
-  body.split(/[\r\n]/).forEach(function (string) {
-    var match = string.match(/([\w-]+):\s*(.*)/i);
-
-    if (Array.isArray(match) && match.length === 3) {
-      var key = match[1];
-      var value = match[2];
-
-      headers[key] = httpMessageParser._isNumeric(value) ? Number(value) : value;
+    if (partHeaderEndsAt === -1) {
+        throw new Error("multipart part must include a blank line");
     }
-  });
 
-  return headers;
+    var partHeadersString = partString.slice(0, partHeaderEndsAt);
+    var partBufferBodyOffset = partHeaderEndsAt + 2;
+    var partBodyBuffer = partBuffer.slice(partBufferBodyOffset);
+
+    var partHeaders = parseHeaders(partHeadersString);
+
+    return {
+        headers: partHeaders,
+        body: partBodyBuffer,
+        meta: {
+            body: {
+                byteOffset: {
+                    start: partBufferOffset + partBufferBodyOffset + 1,
+                    end: partBufferOffset + partBuffer.length + 1
+                }
+            }
+        }
+    };
+};
+//#endregion
+
+//#region packaging
+var isInBrowser = function isInBrowser() {
+    return !((typeof process === "undefined" ? "undefined" : _typeof(process)) === "object" && process + "" === "[object process]");
 };
 
-httpMessageParser._requestLineRegex = /HTTP\/(1\.0|1\.1|2\.0)\s+(\d+)\s+([\w\s-_]+)/i;
-httpMessageParser._responseLineRegex = /(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD|TRACE|CONNECT)\s+(.*)\s+HTTP\/(1\.0|1\.1|2\.0)/i;
-//httpMessageParser._headerNewlineRegex = /^[\r\n]+/gim;
-httpMessageParser._headerNewlineRegex = /^[\r\n]+/gim;
-httpMessageParser._boundaryRegex = /(\n|\r\n)+--[\w-]+(\n|\r\n)+/g;
-
-httpMessageParser._createBuffer = function (data) {
-  return new Buffer(data);
-};
-
-httpMessageParser._isInBrowser = function () {
-  return !((typeof process === 'undefined' ? 'undefined' : _typeof(process)) === 'object' && process + '' === '[object process]');
-};
-
-if (httpMessageParser._isInBrowser) {
-  if ((typeof window === 'undefined' ? 'undefined' : _typeof(window)) === 'object') {
-    window.httpMessageParser = httpMessageParser;
-  }
+if (isInBrowser) {
+    if ((typeof window === "undefined" ? "undefined" : _typeof(window)) === "object") {
+        window.httpMessageParser = httpMessageParser;
+    }
 }
 
-if (typeof exports !== 'undefined') {
-  if (typeof module !== 'undefined' && module.exports) {
-    exports = module.exports = httpMessageParser;
-  }
-  exports.httpMessageParser = httpMessageParser;
-} else if (typeof define === 'function' && define.amd) {
-  define([], function () {
-    return httpMessageParser;
-  });
+if (typeof exports !== "undefined") {
+    if (typeof module !== "undefined" && module.exports) {
+        exports = module.exports = httpMessageParser;
+    }
+    exports.httpMessageParser = httpMessageParser;
+} else {
+    // eslint-disable-next-line no-undef
+    var def = define || null;
+    if (typeof def === "function" && def.amd) {
+        def([], function () {
+            return httpMessageParser;
+        });
+    }
 }
+//#endregion
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"_process":6,"buffer/":3}],2:[function(require,module,exports){
