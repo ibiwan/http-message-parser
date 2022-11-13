@@ -1,0 +1,13 @@
+{
+  "type": "request",
+  "method": "GET",
+  "url": "/hello.htm",
+  "httpVersion": 1.1,
+  "headers": {
+    "Accept-Encoding": "gzip, deflate",
+    "Accept-Language": "en-us",
+    "Connection": "Keep-Alive",
+    "Host": "www.tutorialspoint.com",
+    "User-Agent": "Mozilla/4.0 (compatible; MSIE5.01; Windows NT)"
+  }
+}

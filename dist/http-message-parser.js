@@ -2019,270 +2019,90 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
 }
 
 },{}],4:[function(require,module,exports){
-// shim for using process in browser
-var process = module.exports = {};
-
-// cached from whatever global is present so that test runners that stub it
-// don't break things.  But we need to wrap it in a try catch in case it is
-// wrapped in strict mode code which doesn't define any globals.  It's inside a
-// function because try/catches deoptimize in certain engines.
-
-var cachedSetTimeout;
-var cachedClearTimeout;
-
-function defaultSetTimout() {
-    throw new Error('setTimeout has not been defined');
-}
-function defaultClearTimeout () {
-    throw new Error('clearTimeout has not been defined');
-}
-(function () {
-    try {
-        if (typeof setTimeout === 'function') {
-            cachedSetTimeout = setTimeout;
-        } else {
-            cachedSetTimeout = defaultSetTimout;
-        }
-    } catch (e) {
-        cachedSetTimeout = defaultSetTimout;
-    }
-    try {
-        if (typeof clearTimeout === 'function') {
-            cachedClearTimeout = clearTimeout;
-        } else {
-            cachedClearTimeout = defaultClearTimeout;
-        }
-    } catch (e) {
-        cachedClearTimeout = defaultClearTimeout;
-    }
-} ())
-function runTimeout(fun) {
-    if (cachedSetTimeout === setTimeout) {
-        //normal enviroments in sane situations
-        return setTimeout(fun, 0);
-    }
-    // if setTimeout wasn't available but was latter defined
-    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
-        cachedSetTimeout = setTimeout;
-        return setTimeout(fun, 0);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedSetTimeout(fun, 0);
-    } catch(e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
-            return cachedSetTimeout.call(null, fun, 0);
-        } catch(e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
-            return cachedSetTimeout.call(this, fun, 0);
-        }
-    }
-
-
-}
-function runClearTimeout(marker) {
-    if (cachedClearTimeout === clearTimeout) {
-        //normal enviroments in sane situations
-        return clearTimeout(marker);
-    }
-    // if clearTimeout wasn't available but was latter defined
-    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
-        cachedClearTimeout = clearTimeout;
-        return clearTimeout(marker);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedClearTimeout(marker);
-    } catch (e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
-            return cachedClearTimeout.call(null, marker);
-        } catch (e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
-            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
-            return cachedClearTimeout.call(this, marker);
-        }
-    }
-
-
-
-}
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-
-function cleanUpNextTick() {
-    if (!draining || !currentQueue) {
-        return;
-    }
-    draining = false;
-    if (currentQueue.length) {
-        queue = currentQueue.concat(queue);
-    } else {
-        queueIndex = -1;
-    }
-    if (queue.length) {
-        drainQueue();
-    }
-}
-
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    var timeout = runTimeout(cleanUpNextTick);
-    draining = true;
-
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        while (++queueIndex < len) {
-            if (currentQueue) {
-                currentQueue[queueIndex].run();
-            }
-        }
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    runClearTimeout(timeout);
-}
-
-process.nextTick = function (fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) {
-        for (var i = 1; i < arguments.length; i++) {
-            args[i - 1] = arguments[i];
-        }
-    }
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) {
-        runTimeout(drainQueue);
-    }
-};
-
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function () {
-    this.fun.apply(null, this.array);
-};
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ''; // empty string to avoid regexp issues
-process.versions = {};
-
-function noop() {}
-
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-process.prependListener = noop;
-process.prependOnceListener = noop;
-
-process.listeners = function (name) { return [] }
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-};
-
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-process.umask = function() { return 0; };
-
-},{}],5:[function(require,module,exports){
-(function (process,global){(function (){
-var Buffer = require("buffer").Buffer;
-
-//#region main
-function httpMessageParser(message) {
+const {
+  stringAndBuffer,
+  normalizeNewline
+} = require("./util/transforms");
+const {
+  parseStartLine
+} = require("./util/parser/startLine");
+const {
+  extractHeaderBlock,
+  parseHeaders
+} = require("./util/parser/header");
+const {
+  evalMultiPart,
+  parseMultiPart
+} = require("./util/parser/multipart");
+module.exports = httpMessageParser = message => {
+  // get two copies of message, in case of binary data
   let {
     messageString,
     messageBuffer
   } = stringAndBuffer(message);
   let result;
+  // ditch crlf endings for cr, clear start/end whitesapce
   messageString = normalizeNewline(messageString).trim();
+
+  // get type of message and req/resp fields; return the rest
   ({
     result,
     messageString
   } = parseStartLine(messageString));
+
+  // stop if start-line is everything
   if (!messageString) {
     return result;
   }
   const {
+    type
+  } = result;
+
+  // find header and body sections of message, as applicable
+  const {
     headersString,
     bodyString
-  } = extractHeaderBlock(messageString);
+  } = extractHeaderBlock(type, messageString);
+
+  // parse headers
   if (headersString) {
     const headers = parseHeaders(headersString);
     if (Object.keys(headers).length > 0) {
       result.headers = headers;
     }
   }
+
+  // check for multipart by checking headers,
+  // then by falling back on a boundary-finding heuristic
   const {
     isMultipart,
+    boundary,
     fullBoundary
   } = evalMultiPart(result.headers, bodyString);
-  console.log({
-    isMultipart
-  });
-  if (!isMultipart) {
-    result.body = bodyString;
-  } else {
+  if (boundary) {
+    result.boundary = boundary;
+  }
+  if (isMultipart) {
+    // if multipart, extract each section's headers and content
+    const parts = parseMultiPart(bodyString, fullBoundary, messageBuffer);
     const {
       multipart,
       body,
-      meta
-    } = parseMultiPart(bodyString, fullBoundary, messageBuffer);
+      meta = null
+    } = parts;
     Object.assign(result, {
       multipart,
       body,
       meta
     });
+  } else if (bodyString) {
+    result.body = bodyString;
   }
   return result;
-}
-
-//#endregion
-
-//#region regexes
-const validVersions = ["1.0", "1.1", "2.0"];
-const validVersionsFragment = validVersions.join("|").replace(".", "\\.");
-const versionRE = `(HTTP\\/(?<httpVersion>(${validVersionsFragment})))`;
-const validMethods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD", "TRACE", "CONNECT"];
-const methodRE = `(?<method>${validMethods.join("|")})`;
-const urlRE = "(?<url>\\S*)";
-const someWhitespaceRE = "\\s+";
-const anyWhiteSpaceRE = "\\s*";
-const statusCodeRE = "(?<statusCode>\\d+)";
-const statusMessageRE = "(?<statusMessage>[\\w\\s\\-_]+)";
-const requestLineRE = methodRE + someWhitespaceRE + urlRE + anyWhiteSpaceRE + versionRE + "?";
-const requestLineRegex = new RegExp(requestLineRE, "i");
-const responseLineRE = versionRE + someWhitespaceRE + statusCodeRE + someWhitespaceRE + statusMessageRE;
-const responseLineRegex = new RegExp(responseLineRE, "i");
-const headerNewlineRegex = /^[\r\n]+/gim;
-const findBoundaryRegex = /\n--(?<boundary>[\w-]+)\n/m;
-//#endregion
-
-//#region factories
-const createBuffer = function (data) {
-  return new Buffer(data);
 };
-const emptyResult = () => ({
+
+},{"./util/parser/header":6,"./util/parser/multipart":7,"./util/parser/startLine":8,"./util/transforms":11}],5:[function(require,module,exports){
+module.exports.emptyResult = () => ({
   httpVersion: null,
   statusCode: null,
   statusMessage: null,
@@ -2291,52 +2111,177 @@ const emptyResult = () => ({
   headers: null,
   body: null,
   boundary: null,
-  multipart: null
+  multipart: null,
 });
-//#endregion
 
-//#region predicates
-const isBuffer = function (item) {
-  return isNodeBufferSupported() && typeof global === "object" && global.Buffer.isBuffer(item) || item instanceof Object && item._isBuffer;
-};
-const isNodeBufferSupported = function () {
-  return typeof global === "object" && typeof global.Buffer === "function" && typeof global.Buffer.isBuffer === "function";
-};
-const isNumeric = function _isNumeric(v) {
-  if (typeof v === "number" && !isNaN(v)) {
-    return true;
-  }
-  v = (v || "").toString().trim();
-  if (!v) {
-    return false;
-  }
-  return !isNaN(v);
-};
-//#endregion
+},{}],6:[function(require,module,exports){
+const re = require("../../util/regex");
+const pred = require("../../util/predicates");
 
-//#region transforms
-const stringAndBuffer = inp => {
-  let messageBuffer, messageString;
-  if (isBuffer(inp)) {
-    messageBuffer = inp;
-    messageString = inp.toString();
-  } else if (typeof inp === "string") {
-    messageString = inp;
-    messageBuffer = createBuffer(messageString);
-  } else {
-    throw new Error("Data to be parsed must be a string or Buffer");
+module.exports.extractHeaderBlock = (type, messageString) => {
+  const metaEndsAt = messageString.indexOf("\n\n");
+
+  if (metaEndsAt === -1) {
+    return {
+      [type ? "headersString" : "bodyString"]: messageString,
+    };
   }
+
+  const headersString = messageString.slice(0, metaEndsAt);
+  const headerZero = headersString.split("\n")[0];
+  if (headerZero.match(re.headerKVRegex)) {
+    return {
+      headersString: messageString.slice(0, metaEndsAt),
+      bodyString: messageString.slice(metaEndsAt + 2),
+    };
+  }
+
   return {
-    messageString,
-    messageBuffer
+    bodyString: messageString,
   };
 };
-const normalizeNewline = str => str.replace(/\r\n/gim, "\n");
-//#endregion
 
-//#region parsers
-const parseStartLine = messageString => {
-  const result = emptyResult();
+module.exports.parseHeaders = function _parseHeaders(headersString) {
+  return headersString.split("\n").reduce((headers, headerLine) => {
+    const matches = headerLine.match(re.headerKVRegex);
+    const groups = matches && matches.groups;
+
+    if (groups && pred.isNumeric(groups.value)) {
+      groups.value = Number(groups.value);
+    }
+
+    if (groups) {
+      headers[groups.key] = groups.value;
+    }
+
+    return headers;
+  }, {});
+};
+
+const parseBoundaryHeader = (headers) => {
+  const type = headers["Content-Type"];
+  if (!type) {
+    return null;
+  }
+
+  return type.match(/^multipart\/[\w-]+;\s*boundary=(?<boundary>.*)$/)?.groups
+    ?.boundary;
+};
+
+},{"../../util/predicates":9,"../../util/regex":10}],7:[function(require,module,exports){
+const re = require("../../util/regex");
+const pHead = require("./header");
+
+module.exports.evalMultiPart = (headers, bodyString) => {
+  let boundary;
+  if (headers?.["Content-Type"]?.match(/^multipart\//)) {
+    boundary = parseBoundaryHeader(headers);
+  }
+
+  if (!boundary) {
+    boundary = deriveBoundary(bodyString);
+  }
+
+  if (boundary) {
+    const fullBoundary = boundary ? "\n--" + boundary : null;
+
+    return {
+      isMultipart: true,
+      boundary,
+      fullBoundary,
+    };
+  } else {
+    return { isMultipart: false };
+  }
+};
+
+const deriveBoundary = (body) => {
+  return body?.match(re.findBoundaryRegex)?.groups?.boundary;
+};
+
+module.exports.parseMultiPart = (bodyString, fullBoundary, messageBuffer) => {
+  const savedBody = bodyString;
+  const partsAndParts = [];
+
+  const firstBoundary = fullBoundary.slice(1);
+
+  let lastStringBoundary = bodyString.indexOf(firstBoundary);
+  let lastBufferBoundary = messageBuffer.indexOf(firstBoundary);
+
+  const hop = fullBoundary.length;
+
+  while (lastStringBoundary !== -1 && lastBufferBoundary !== -1) {
+    const nextStringBoundary = bodyString.indexOf(
+      fullBoundary,
+      lastStringBoundary + hop
+    );
+    const nextBufferBoundary = messageBuffer.indexOf(
+      fullBoundary,
+      lastBufferBoundary + hop
+    );
+
+    if (nextStringBoundary === -1 || nextBufferBoundary === -1) {
+      break;
+    }
+
+    // copy next part without moving the line
+    const partString = bodyString.slice(
+      lastStringBoundary + hop,
+      nextStringBoundary
+    );
+    const partBuffer = messageBuffer.slice(
+      lastBufferBoundary + hop,
+      nextBufferBoundary
+    );
+
+    partsAndParts.push({
+      partString,
+      partBuffer,
+      partBufferOffset: lastBufferBoundary + hop,
+    });
+
+    // record next place to search from
+    lastStringBoundary = nextStringBoundary;
+    lastBufferBoundary = nextBufferBoundary;
+  }
+
+  const parts = partsAndParts.map(parseBodyPart);
+
+  return { multipart: parts, body: savedBody };
+};
+
+const parseBodyPart = ({ partString, partBuffer, partBufferOffset }) => {
+  const partHeaderEndsAt = partString.indexOf("\n\n");
+
+  if (partHeaderEndsAt === -1) {
+    throw new Error("multipart part must include a blank line");
+  }
+
+  const partHeadersString = partString.slice(0, partHeaderEndsAt);
+  const partBufferBodyOffset = partHeaderEndsAt + 2;
+  const partBodyBuffer = partBuffer.slice(partBufferBodyOffset);
+
+  const partHeaders = pHead.parseHeaders(partHeadersString);
+
+  return {
+    headers: partHeaders,
+    body: partBodyBuffer,
+    meta: {
+      body: {
+        byteOffset: {
+          start: partBufferOffset + partBufferBodyOffset + 1,
+          end: partBufferOffset + partBuffer.length + 1,
+        },
+      },
+    },
+  };
+};
+
+},{"../../util/regex":10,"./header":6}],8:[function(require,module,exports){
+const re = require("../../util/regex");
+const fac = require("../factory");
+module.exports.parseStartLine = messageString => {
+  const result = fac.emptyResult();
   const firstLineEndsAt = messageString.indexOf("\n");
   const firstLine = firstLineEndsAt === -1 ? messageString : messageString.slice(0, firstLineEndsAt);
   let wasReqRes = false;
@@ -2360,7 +2305,7 @@ const parseStartLine = messageString => {
   };
 };
 const parseRequestLine = line => {
-  const matches = line.match(requestLineRegex);
+  const matches = line.match(re.requestLineRegex);
   const groups = matches && matches.groups;
   if (groups) {
     const {
@@ -2378,7 +2323,7 @@ const parseRequestLine = line => {
   return null;
 };
 const parseResponseLine = line => {
-  const matches = line.match(responseLineRegex);
+  const matches = line.match(re.responseLineRegex);
   const groups = matches && matches.groups;
   if (groups) {
     const {
@@ -2395,158 +2340,64 @@ const parseResponseLine = line => {
   }
   return null;
 };
-const extractHeaderBlock = messageString => {
-  const metaEndsAt = messageString.indexOf("\n\n");
-  if (metaEndsAt === -1) {
-    return {
-      bodyString: messageString
-    };
+
+},{"../../util/regex":10,"../factory":5}],9:[function(require,module,exports){
+(function (global){(function (){
+module.exports.isBuffer = function (item) {
+  return isNodeBufferSupported() && typeof global === "object" && global.Buffer.isBuffer(item) || item instanceof Object && item._isBuffer;
+};
+const isNodeBufferSupported = function () {
+  return typeof global === "object" && typeof global.Buffer === "function" && typeof global.Buffer.isBuffer === "function";
+};
+module.exports.isNumeric = function _isNumeric(v) {
+  if (typeof v === "number" && !isNaN(v)) {
+    return true;
+  }
+  v = (v || "").toString().trim();
+  if (!v) {
+    return false;
+  }
+  return !isNaN(v);
+};
+
+}).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],10:[function(require,module,exports){
+const validVersions = ["1.0", "1.1", "2.0"];
+const validVersionsFragment = validVersions.join("|").replace(".", "\\.");
+const versionRE = `(HTTP\\/(?<httpVersion>(${validVersionsFragment})))`;
+const validMethods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD", "TRACE", "CONNECT"];
+const methodRE = `(?<method>${validMethods.join("|")})`;
+const urlRE = "(?<url>\\S*)";
+const someWhitespaceRE = "\\s+";
+const anyWhiteSpaceRE = "\\s*";
+const statusCodeRE = "(?<statusCode>\\d+)";
+const statusMessageRE = "(?<statusMessage>[\\w\\s\\-_]+)";
+const requestLineRE = methodRE + someWhitespaceRE + urlRE + anyWhiteSpaceRE + versionRE + "?";
+module.exports.requestLineRegex = new RegExp(requestLineRE, "i");
+const responseLineRE = versionRE + someWhitespaceRE + statusCodeRE + someWhitespaceRE + statusMessageRE;
+module.exports.responseLineRegex = new RegExp(responseLineRE, "i");
+module.exports.headerKVRegex = /(?<key>[\w-]+):\s*(?<value>.*)/;
+module.exports.findBoundaryRegex = /\n--(?<boundary>[\w-]+)\n/m;
+
+},{}],11:[function(require,module,exports){
+var Buffer = require("buffer").Buffer;
+const pred = require("./predicates");
+module.exports.stringAndBuffer = inp => {
+  let messageBuffer, messageString;
+  if (pred.isBuffer(inp)) {
+    messageBuffer = inp;
+    messageString = inp.toString();
+  } else if (typeof inp === "string") {
+    messageString = inp;
+    messageBuffer = Buffer.from(messageString);
+  } else {
+    throw new Error("Data to be parsed must be a string or Buffer");
   }
   return {
-    headersString: messageString.slice(0, metaEndsAt),
-    bodyString: messageString.slice(metaEndsAt + 1)
+    messageString,
+    messageBuffer
   };
 };
-const parseHeaders = function _parseHeaders(headerString) {
-  return headerString.split("\n").reduce((headers, headerLine) => {
-    const matches = headerLine.match(/(?<key>[\w-]+):\s*(?<value>.*)/);
-    const groups = matches && matches.groups;
-    if (groups && isNumeric(groups.value)) {
-      groups.value = Number(groups.value);
-    }
-    if (groups) {
-      headers[groups.key] = groups.value;
-    }
-    return headers;
-  }, {});
-};
-const evalMultiPart = (headers, bodyString) => {
-  console.log({
-    headers
-  });
-  if (headers?.["Content-Type"]?.match(/^multipart\//)) {
-    console.log("has header");
-  }
-  if (!headers || !headers["Content-Type"] || !headers["Content-Type"].match(/^multipart\//)) {
-    return {
-      isMultipart: false
-    };
-  }
-  const boundary = parseBoundaryHeader(headers) || deriveBoundary(bodyString);
-  const fullBoundary = boundary ? "\n--" + boundary : null;
-  return {
-    isMultipart: true,
-    fullBoundary
-  };
-};
-const parseBoundaryHeader = headers => {
-  const type = headers["Content-Type"];
-  if (!type) {
-    console.log("not header-controlled");
-    return null;
-  }
-  const matches = type.match(/^multipart\/[\w-]+;\s*boundary=(?<boundary>.*)$/);
-  const groups = matches && matches.groups;
-  const boundary = groups && groups.boundary;
-  console.log({
-    boundary
-  });
-  return boundary;
-};
-const deriveBoundary = body => {
-  const matches = body.match(findBoundaryRegex);
-  console.log({
-    body,
-    findBoundaryRegex,
-    matches
-  });
-  const groups = matches && matches.groups;
-  return groups && groups.boundary;
-};
-const parseMultiPart = (bodyString, fullBoundary, messageBuffer) => {
-  const savedBody = bodyString;
-  const partsAndParts = [];
-  let lastStringBoundary = bodyString.indexOf(fullBoundary);
-  let lastBufferBoundary = messageBuffer.indexOf(fullBoundary);
-  const hop = fullBoundary.length;
-  while (lastStringBoundary !== -1 && lastBufferBoundary !== -1) {
-    const nextStringBoundary = bodyString.indexOf(fullBoundary, lastStringBoundary + hop);
-    const nextBufferBoundary = messageBuffer.indexOf(fullBoundary, lastBufferBoundary + hop);
-    if (nextStringBoundary === -1 || nextBufferBoundary === -1) {
-      break;
-    }
+module.exports.normalizeNewline = str => str.replace(/\r\n/gim, "\n");
 
-    // copy next part without moving the line
-    const partString = bodyString.slice(lastStringBoundary + hop, nextStringBoundary);
-    const partBuffer = messageBuffer.slice(lastBufferBoundary + hop, nextBufferBoundary);
-    partsAndParts.push({
-      partString,
-      partBuffer,
-      partBufferOffset: lastBufferBoundary + hop
-    });
-
-    // record next place to search from
-    lastStringBoundary = nextStringBoundary;
-    lastBufferBoundary = nextBufferBoundary;
-  }
-  const parts = partsAndParts.map(parseBodyPart);
-  return {
-    multipart: parts,
-    body: savedBody
-  };
-};
-const parseBodyPart = ({
-  partString,
-  partBuffer,
-  partBufferOffset
-}) => {
-  const partHeaderEndsAt = partString.indexOf("\n\n");
-  if (partHeaderEndsAt === -1) {
-    throw new Error("multipart part must include a blank line");
-  }
-  const partHeadersString = partString.slice(0, partHeaderEndsAt);
-  const partBufferBodyOffset = partHeaderEndsAt + 2;
-  const partBodyBuffer = partBuffer.slice(partBufferBodyOffset);
-  const partHeaders = parseHeaders(partHeadersString);
-  return {
-    headers: partHeaders,
-    body: partBodyBuffer,
-    meta: {
-      body: {
-        byteOffset: {
-          start: partBufferOffset + partBufferBodyOffset + 1,
-          end: partBufferOffset + partBuffer.length + 1
-        }
-      }
-    }
-  };
-};
-//#endregion
-
-//#region packaging
-const isInBrowser = function () {
-  return !(typeof process === "object" && process + "" === "[object process]");
-};
-if (isInBrowser) {
-  if (typeof window === "object") {
-    window.httpMessageParser = httpMessageParser;
-  }
-}
-if (typeof exports !== "undefined") {
-  if (typeof module !== "undefined" && module.exports) {
-    exports = module.exports = httpMessageParser;
-  }
-  exports.httpMessageParser = httpMessageParser;
-} else {
-  // eslint-disable-next-line no-undef
-  const def = define || null;
-  if (typeof def === "function" && def.amd) {
-    def([], function () {
-      return httpMessageParser;
-    });
-  }
-}
-//#endregion
-
-}).call(this)}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":4,"buffer":2}]},{},[5]);
+},{"./predicates":9,"buffer":2}]},{},[4]);

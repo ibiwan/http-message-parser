@@ -1,0 +1,52 @@
+const re = require("../../util/regex");
+const pred = require("../../util/predicates");
+
+module.exports.extractHeaderBlock = (type, messageString) => {
+  const metaEndsAt = messageString.indexOf("\n\n");
+
+  if (metaEndsAt === -1) {
+    return {
+      [type ? "headersString" : "bodyString"]: messageString,
+    };
+  }
+
+  const headersString = messageString.slice(0, metaEndsAt);
+  const headerZero = headersString.split("\n")[0];
+  if (headerZero.match(re.headerKVRegex)) {
+    return {
+      headersString: messageString.slice(0, metaEndsAt),
+      bodyString: messageString.slice(metaEndsAt + 2),
+    };
+  }
+
+  return {
+    bodyString: messageString,
+  };
+};
+
+module.exports.parseHeaders = function _parseHeaders(headersString) {
+  return headersString.split("\n").reduce((headers, headerLine) => {
+    const matches = headerLine.match(re.headerKVRegex);
+    const groups = matches && matches.groups;
+
+    if (groups && pred.isNumeric(groups.value)) {
+      groups.value = Number(groups.value);
+    }
+
+    if (groups) {
+      headers[groups.key] = groups.value;
+    }
+
+    return headers;
+  }, {});
+};
+
+const parseBoundaryHeader = (headers) => {
+  const type = headers["Content-Type"];
+  if (!type) {
+    return null;
+  }
+
+  return type.match(/^multipart\/[\w-]+;\s*boundary=(?<boundary>.*)$/)?.groups
+    ?.boundary;
+};

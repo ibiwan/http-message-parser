@@ -1,0 +1,107 @@
+const re = require("../../util/regex");
+const pHead = require("./header");
+
+module.exports.evalMultiPart = (headers, bodyString) => {
+  let boundary;
+  if (headers?.["Content-Type"]?.match(/^multipart\//)) {
+    boundary = parseBoundaryHeader(headers);
+  }
+
+  if (!boundary) {
+    boundary = deriveBoundary(bodyString);
+  }
+
+  if (boundary) {
+    const fullBoundary = boundary ? "\n--" + boundary : null;
+
+    return {
+      isMultipart: true,
+      boundary,
+      fullBoundary,
+    };
+  } else {
+    return { isMultipart: false };
+  }
+};
+
+const deriveBoundary = (body) => {
+  return body?.match(re.findBoundaryRegex)?.groups?.boundary;
+};
+
+module.exports.parseMultiPart = (bodyString, fullBoundary, messageBuffer) => {
+  const savedBody = bodyString;
+  const partsAndParts = [];
+
+  const firstBoundary = fullBoundary.slice(1);
+
+  let lastStringBoundary = bodyString.indexOf(firstBoundary);
+  let lastBufferBoundary = messageBuffer.indexOf(firstBoundary);
+
+  const hop = fullBoundary.length;
+
+  while (lastStringBoundary !== -1 && lastBufferBoundary !== -1) {
+    const nextStringBoundary = bodyString.indexOf(
+      fullBoundary,
+      lastStringBoundary + hop
+    );
+    const nextBufferBoundary = messageBuffer.indexOf(
+      fullBoundary,
+      lastBufferBoundary + hop
+    );
+
+    if (nextStringBoundary === -1 || nextBufferBoundary === -1) {
+      break;
+    }
+
+    // copy next part without moving the line
+    const partString = bodyString.slice(
+      lastStringBoundary + hop,
+      nextStringBoundary
+    );
+    const partBuffer = messageBuffer.slice(
+      lastBufferBoundary + hop,
+      nextBufferBoundary
+    );
+
+    partsAndParts.push({
+      partString,
+      partBuffer,
+      partBufferOffset: lastBufferBoundary + hop,
+    });
+
+    // record next place to search from
+    lastStringBoundary = nextStringBoundary;
+    lastBufferBoundary = nextBufferBoundary;
+  }
+
+  const parts = partsAndParts.map(parseBodyPart);
+
+  return { multipart: parts, body: savedBody };
+};
+
+const parseBodyPart = ({ partString, partBuffer, partBufferOffset }) => {
+  const partHeaderEndsAt = partString.indexOf("\n\n");
+
+  if (partHeaderEndsAt === -1) {
+    throw new Error("multipart part must include a blank line");
+  }
+
+  const partHeadersString = partString.slice(0, partHeaderEndsAt);
+  const partBufferBodyOffset = partHeaderEndsAt + 2;
+  const partBodyBuffer = partBuffer.slice(partBufferBodyOffset);
+
+  const partHeaders = pHead.parseHeaders(partHeadersString);
+
+  return {
+    headers: partHeaders,
+    body: partBodyBuffer,
+    meta: {
+      body: {
+        byteOffset: {
+          start: partBufferOffset + partBufferBodyOffset + 1,
+          end: partBufferOffset + partBuffer.length + 1,
+        },
+      },
+    },
+  };
+};

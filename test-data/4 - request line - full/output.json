@@ -1,0 +1,6 @@
+{
+  "httpVersion": 1.1,
+  "method": "GET",
+  "type": "request",
+  "url": "https:developer.mozilla.org/en-US/docs/Web/HTTP/Messages"
+}

@@ -102,14 +102,17 @@ describe("httpMessageParser", () => {
       let output = httpMessageParser(input);
 
       // don't try to compare string representations of binary data
-      if (expectedOutput.body === "__JUST_CHECK_EXISTENCE__") {
+      if (
+        expectedOutput.body === "__JUST_CHECK_EXISTENCE__" &&
+        "body" in output
+      ) {
         const outputBody = output.body;
         output.body = "__JUST_CHECK_EXISTENCE__";
       }
-      
+
       // flatten buffer objects for comparison
-      output = JSON.parse(JSON.stringify(output))
-      
+      output = JSON.parse(JSON.stringify(output));
+
       expect(output).toEqual(expectedOutput);
     });
   });
