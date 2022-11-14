@@ -47,8 +47,8 @@ module.exports = httpMessageParser = (message) => {
   if (isMultipart) {
     // if multipart, extract each section's headers and content
     const parts = parseMultiPart(bodyString, fullBoundary, messageBuffer);
-    const { multipart, body, meta = null } = parts;
-    Object.assign(result, { multipart, body, meta });
+    const { multipart, body } = parts;
+    Object.assign(result, { multipart, body });
   } else if (bodyString) {
     result.body = bodyString;
   }

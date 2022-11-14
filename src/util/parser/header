@@ -41,7 +41,7 @@ module.exports.parseHeaders = function _parseHeaders(headersString) {
   }, {});
 };
 
-const parseBoundaryHeader = (headers) => {
+module.exports.parseBoundaryHeader = (headers) => {
   const type = headers["Content-Type"];
   if (!type) {
     return null;

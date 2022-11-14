@@ -1,5 +1,5 @@
 const re = require("../../util/regex");
-const pHead = require("./header");
+const { parseHeaders, parseBoundaryHeader } = require("./header");
 
 module.exports.evalMultiPart = (headers, bodyString) => {
   let boundary;
@@ -90,7 +90,7 @@ const parseBodyPart = ({ partString, partBuffer, partBufferOffset }) => {
   const partBufferBodyOffset = partHeaderEndsAt + 2;
   const partBodyBuffer = partBuffer.slice(partBufferBodyOffset);
 
-  const partHeaders = pHead.parseHeaders(partHeadersString);
+  const partHeaders = parseHeaders(partHeadersString);
 
   return {
     headers: partHeaders,

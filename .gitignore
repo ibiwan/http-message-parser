@@ -22,3 +22,4 @@ node_modules
 # Folders to ignore #
 #####################
 .idea
+saved-files/

@@ -1,25 +1,12 @@
 {
-  "httpVersion": 1.1,
-  "statusCode": 200,
-  "statusMessage": "OK",
+  "httpVersion": null,
+  "statusCode": null,
+  "statusMessage": null,
   "method": null,
   "url": null,
-  "headers": {
-    "Cache-Control": "max-age=604800",
-    "Content-Type": "text/html",
-    "Date": "Thu, 25 Feb 2016 08:38:00 GMT",
-    "Etag": "\"359670651+gzip+ident\"",
-    "Expires": "Thu, 03 Mar 2016 08:38:00 GMT",
-    "Last-Modified": "Fri, 09 Aug 2013 23:54:35 GMT",
-    "Server": "ECS (mdw/1275)",
-    "Vary": "Accept-Encoding",
-    "X-Cache": "HIT",
-    "x-ec-custom-error": 1,
-    "Content-Length": 1270
-  },
+  "headers": null,
   "boundary": "fe08dcc5-e670-426c-9f13-679a8f3f623d",
   "body": "__JUST_CHECK_EXISTENCE__",
-  "type": "response",
   "multipart": [
     {
       "headers": { "Content-Type": "application/json" },
@@ -146,7 +133,7 @@
           69, 95, 80, 82, 69, 86, 73, 79, 85, 83, 34, 125, 125, 93, 125, 125
         ]
       },
-      "meta": { "body": { "byteOffset": { "start": 390, "end": 2213 } } }
+      "meta": { "body": { "byteOffset": { "start": 72, "end": 1895 } } }
     },
     {
       "headers": {
@@ -1316,7 +1303,7 @@
         ]
       },
       "meta": {
-        "body": { "byteOffset": { "start": 2373, "end": 25743 } }
+        "body": { "byteOffset": { "start": 2055, "end": 25425 } }
       }
     },
     {
@@ -2770,7 +2757,7 @@
         ]
       },
       "meta": {
-        "body": { "byteOffset": { "start": 25925, "end": 46739 } }
+        "body": { "byteOffset": { "start": 25607, "end": 46421 } }
       }
     }
   ]

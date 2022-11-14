@@ -1,8 +1,9 @@
 const fs = require("fs");
 const path = require("path");
-const Buffer = require("buffer").Buffer;
+// const Buffer = require("buffer").Buffer;
 
 const httpMessageParser = require("./http-message-parser");
+const { saveFile } = require("./util/saveFiles");
 
 const emptyResult = {
   httpVersion: null,
@@ -101,13 +102,19 @@ describe("httpMessageParser", () => {
 
       let output = httpMessageParser(input);
 
+      const { body, headers, multipart } = output;
+
       // don't try to compare string representations of binary data
-      if (
-        expectedOutput.body === "__JUST_CHECK_EXISTENCE__" &&
-        "body" in output
-      ) {
-        const outputBody = output.body;
+      if (body && expectedOutput.body === "__JUST_CHECK_EXISTENCE__") {
         output.body = "__JUST_CHECK_EXISTENCE__";
+      }
+
+      if (body && !multipart) {
+        saveFile(headers, body, [_desc, "body"].join(" - "));
+      } else if (multipart) {
+        multipart.forEach(({ headers, body }, i) =>
+          saveFile(headers, body, [_desc, "multi", i].join(" - "))
+        );
       }
 
       // flatten buffer objects for comparison

@@ -1,0 +1,7 @@
+
+POST /
+Content-Type: application/json
+
+query ($arg1: String) { hello (name: $arg1) { value } }
+
+{ "arg1": "Timothy" }

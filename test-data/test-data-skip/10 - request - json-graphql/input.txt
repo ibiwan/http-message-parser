@@ -1,0 +1,9 @@
+
+POST /
+Content-Type: application/json
+
+{
+  "query": "query GreetingQuery ($arg1: String) { hello (name: $arg1) { value } }",
+  "operationName": "GreetingQuery",
+  "variables": { "arg1": "Timothy" }
+}

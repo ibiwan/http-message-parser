@@ -1,0 +1,4 @@
+POST /
+Content-Type: application/json
+
+query {purple  { hello  { value } }}

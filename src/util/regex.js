@@ -2,6 +2,9 @@ const validVersions = ["1.0", "1.1", "2.0"];
 const validVersionsFragment = validVersions.join("|").replace(".", "\\.");
 const versionRE = `(HTTP\\/(?<httpVersion>(${validVersionsFragment})))`;
 
+const someWhitespaceRE = "\\s+";
+const anyWhiteSpaceRE = "\\s*";
+
 const validMethods = [
   "GET",
   "POST",
@@ -14,17 +17,13 @@ const validMethods = [
   "CONNECT",
 ];
 const methodRE = `(?<method>${validMethods.join("|")})`;
-
 const urlRE = "(?<url>\\S*)";
-const someWhitespaceRE = "\\s+";
-const anyWhiteSpaceRE = "\\s*";
-const statusCodeRE = "(?<statusCode>\\d+)";
-const statusMessageRE = "(?<statusMessage>[\\w\\s\\-_]+)";
-
 const requestLineRE =
   methodRE + someWhitespaceRE + urlRE + anyWhiteSpaceRE + versionRE + "?";
 module.exports.requestLineRegex = new RegExp(requestLineRE, "i");
 
+const statusCodeRE = "(?<statusCode>\\d+)";
+const statusMessageRE = "(?<statusMessage>[\\w\\s\\-_]+)";
 const responseLineRE =
   versionRE +
   someWhitespaceRE +

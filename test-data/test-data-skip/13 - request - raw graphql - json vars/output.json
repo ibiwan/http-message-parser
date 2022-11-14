@@ -1,0 +1,10 @@
+{
+  "type": "request",
+  "url": "/",
+  "method": "POST",
+  "httpVersion": 1.1,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "query ($arg1: String) { hello (name: $arg1) { value } }\n\n{ \"arg1\": \"Timothy\" }"
+}

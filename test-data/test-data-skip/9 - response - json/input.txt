@@ -1,0 +1,19 @@
+HTTP/1.1 200 OK
+Content-Type: application/vnd.api+json
+
+{
+    "data": [{
+        "type": "articles",
+        "id": "1",
+        "relationships": {
+            "author": {
+                "data": {"id": "42", "type": "people"}
+            }
+        }
+    }],
+    "included": [
+        {
+            "type": "people"
+        }
+    ]   
+}
