@@ -2087,13 +2087,11 @@ module.exports = httpMessageParser = message => {
     const parts = parseMultiPart(bodyString, fullBoundary, messageBuffer);
     const {
       multipart,
-      body,
-      meta = null
+      body
     } = parts;
     Object.assign(result, {
       multipart,
-      body,
-      meta
+      body
     });
   } else if (bodyString) {
     result.body = bodyString;
@@ -2111,7 +2109,7 @@ module.exports.emptyResult = () => ({
   headers: null,
   body: null,
   boundary: null,
-  multipart: null,
+  multipart: null
 });
 
 },{}],6:[function(require,module,exports){
@@ -2158,7 +2156,7 @@ module.exports.parseHeaders = function _parseHeaders(headersString) {
   }, {});
 };
 
-const parseBoundaryHeader = (headers) => {
+module.exports.parseBoundaryHeader = (headers) => {
   const type = headers["Content-Type"];
   if (!type) {
     return null;
@@ -2170,7 +2168,7 @@ const parseBoundaryHeader = (headers) => {
 
 },{"../../util/predicates":9,"../../util/regex":10}],7:[function(require,module,exports){
 const re = require("../../util/regex");
-const pHead = require("./header");
+const { parseHeaders, parseBoundaryHeader } = require("./header");
 
 module.exports.evalMultiPart = (headers, bodyString) => {
   let boundary;
@@ -2261,7 +2259,7 @@ const parseBodyPart = ({ partString, partBuffer, partBufferOffset }) => {
   const partBufferBodyOffset = partHeaderEndsAt + 2;
   const partBodyBuffer = partBuffer.slice(partBufferBodyOffset);
 
-  const partHeaders = pHead.parseHeaders(partHeadersString);
+  const partHeaders = parseHeaders(partHeadersString);
 
   return {
     headers: partHeaders,
@@ -2365,15 +2363,15 @@ module.exports.isNumeric = function _isNumeric(v) {
 const validVersions = ["1.0", "1.1", "2.0"];
 const validVersionsFragment = validVersions.join("|").replace(".", "\\.");
 const versionRE = `(HTTP\\/(?<httpVersion>(${validVersionsFragment})))`;
+const someWhitespaceRE = "\\s+";
+const anyWhiteSpaceRE = "\\s*";
 const validMethods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD", "TRACE", "CONNECT"];
 const methodRE = `(?<method>${validMethods.join("|")})`;
 const urlRE = "(?<url>\\S*)";
-const someWhitespaceRE = "\\s+";
-const anyWhiteSpaceRE = "\\s*";
-const statusCodeRE = "(?<statusCode>\\d+)";
-const statusMessageRE = "(?<statusMessage>[\\w\\s\\-_]+)";
 const requestLineRE = methodRE + someWhitespaceRE + urlRE + anyWhiteSpaceRE + versionRE + "?";
 module.exports.requestLineRegex = new RegExp(requestLineRE, "i");
+const statusCodeRE = "(?<statusCode>\\d+)";
+const statusMessageRE = "(?<statusMessage>[\\w\\s\\-_]+)";
 const responseLineRE = versionRE + someWhitespaceRE + statusCodeRE + someWhitespaceRE + statusMessageRE;
 module.exports.responseLineRegex = new RegExp(responseLineRE, "i");
 module.exports.headerKVRegex = /(?<key>[\w-]+):\s*(?<value>.*)/;

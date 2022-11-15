@@ -1,6 +1,6 @@
 {
   "name": "@ibiwan/http-message-parser",
-  "version": "0.0.34",
+  "version": "0.1.1",
   "description": "HTTP message parser in JavaScript.",
   "main": "src/http-message-parser.js",
   "directories": {
